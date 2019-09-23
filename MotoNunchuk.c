@@ -8,7 +8,7 @@
 #include <fcntl.h>
 #include <string.h>
 
-#define LCD_DEVICE "/dev/lcd"
+//#define LCD_DEVICE "/dev/lcd"
 
 /*
 int *joyX, *joyY;
@@ -22,46 +22,43 @@ void motorSetup(void);
 void motorStop(void);
 void motorMoveNormal(char);
 void motorMovePWM(int);
+int LCDsetup(string);
+int nunchukSetup(int);
+void LCDprintIntXY(int, char, char);
 
 enum Direction {CCW, CW};
 enum motorMode {NORMAL, PWM};
 
 const int motorRangeLow = 980;
 const int motorRangeHigh = 820;
-const char A = 0, B = 1;  //motor bridge pins connected to RaspberryPi (use wiringPi numbers)
+const char A = 0, B = 1;  //motor H-bridge pins connected to RaspberryPi (use wiringPi numbers)
 char motorDir = CW;
 char motorMode = NORMAL;
 
-int main(void) {
+int main(void)
+{
     int NUNCHUCK_DEVICE = 0x52;
-    int k;
+    //int k;
     int temp = 34;
     char cText[20];
 
     printf("Testing the nunchuk through I2C\n");
     wiringPiSetup();
     motorSetup();
-
-    int dfd = open(LCD_DEVICE, O_WRONLY);
-    if (dfd < 0)
+    LCDsetup("/dev/lcd");
+    
+    if (nunchukSetup(NUNCHUCK_DEVICE) < 0)
     {
-	printf("LCD not detected");
+	printf("Error setting up I2C: %d\n", errno);
+	exit(0);
     }
     else
-	//k = write(dfd,"Hello\n", 6);
-    //printf("write=%d\n", write(dfd,"LCD OK\n", 6));
-    write(dfd, "NUNCHUK TEST", 12);
-
-    int fd = wiringPiI2CSetup(NUNCHUCK_DEVICE);
-    //printf("fd= %d\n", fd);
-    if (fd < 0) {
-        printf("Error setting up I2C: %d\n", errno);
-        exit(0);
+    {	// nunchuk device init
+    	wiringPiI2CWriteReg8(fd, 0xF0, 0x55);
+    	delayMicroseconds(500);
+    	wiringPiI2CWriteReg8(fd, 0xFB, 0x00);
+    	delayMicroseconds(500);
     }
-    wiringPiI2CWriteReg8(fd, 0xF0, 0x55);
-    delayMicroseconds(500);
-    wiringPiI2CWriteReg8(fd, 0xFB, 0x00);
-    delayMicroseconds(500);
 
     //pinMode(1, PWM_OUTPUT);
     //pwmWrite(1, 700);
@@ -266,4 +263,45 @@ void motorMovePWM(int speed)
 	digitalWrite(A, 1);
 	pwmWrite(B, speed);
     }
+}
+
+int LCDsetup(string LCD_DEVICE)
+{
+    int dfd = open(LCD_DEVICE, O_WRONLY);
+    if (dfd < 0)
+	printf("LCD not detected");
+    else
+    {
+	//k = write(dfd,"Hello\n", 6);
+    	//printf("write=%d\n", write(dfd,"LCD OK\n", 6));
+    	write(dfd, "NUNCHUK TEST", 12);
+    }
+	
+    return dfd;
+}
+
+int nunchukSetup(int deviceNo)
+{
+    int fd = wiringPiI2CSetup(deviceNo);
+
+    return fd;
+}
+
+void LCDprintIntXY(int value, char x, char y)
+{
+	char result[20];
+	char cValue[5];
+	char cX[2];
+	char cY[2];
+	sprintf(cValue, "%d", value);
+	sprintf(cX, "%d", x);
+	sprintf(cY, "%d", y);
+	strcpy(result, "\e[Ly");
+	strcat(result, cY);
+	strcat(result, "x");
+	strcat(result, cX);
+	strcat(result, ";");
+	strcat(result, cValue);
+	
+   	write (dfd, result, 12);
 }
