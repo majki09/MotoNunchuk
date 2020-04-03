@@ -1,58 +1,38 @@
 #include <stdio.h>
 #include <unistd.h>
 #include <stdlib.h>
-//#include <wiringPi.h>
+#include <wiringPi.h>
 #include <wiringPiI2C.h>
 #include <errno.h>
 #include <ncurses.h>
 #include <fcntl.h>
 #include <string.h>
 
-//#define LCD_DEVICE "/dev/lcd"
+#define LCD_DEVICE "/dev/lcd"
 
 
-//void motorSetup(void);
-//void motorStop(void);
-//void motorMoveNormal(char);
-//void motorMovePWM(int);
 void LCDsetup(void);
 void nunchukSetup(int);
 void LCDprintIntXY(int, char, char);
 
-//enum Direction {CCW, CW};
-//enum motorMode {NORMAL, PWM};
-
 const int motorRangeLow = 980;
 const int motorRangeHigh = 820;
-//const char A = 0, B = 1;  //motor H-bridge pins connected to RaspberryPi (use wiringPi numbers)
-//char motorDir = CW;
-//char motorMode = NORMAL;
-int nunchukHandler;
-int LCDhandler;
+const int NUNCHUCK_I2C_ID = 0x52;
+const char DISPLAY_ON_SCREEN = 1;
+const char DISPLAY_ON_LCD = 1;
+int nunchukHandle;
+int LCDhandle;
 
 int main(void)
 {
-	int NUNCHUCK_DEVICE = 0x52;
 	char cText[20];
+	
+	initscr();		// Start curses mode
 
 	printf("Testing the nunchuk through I2C\n");
 	wiringPiSetup();
-	//motorSetup();
 	LCDsetup();
-	nunchukSetup(NUNCHUCK_DEVICE);
-	
-	if (nunchukHandler < 0)
-	{
-		printf("Error setting up I2C: %d\n", errno);
-		exit(errno);
-	}
-	else
-	{	// nunchuk device init
-		wiringPiI2CWriteReg8(nunchukHandler, 0xF0, 0x55);
-		delayMicroseconds(500);
-		wiringPiI2CWriteReg8(nunchukHandler, 0xFB, 0x00);
-		delayMicroseconds(500);
-	}
+		
 
 	int bytes[6];
 	int i;
@@ -66,8 +46,6 @@ int main(void)
 	int accelX_min=300, accelY_min=300, accelZ_min=300;
 	//int x_percent, y_percent;
 	
-	initscr();		// Start curses mode
-	
 	//WINDOW * labels_win = newwin (10, 20, 0, 0);
 	//WINDOW * values_win = newwin (10, 20, 0, 8);
 	WINDOW * joy_win = newwin(20, 40, 10, 1);
@@ -79,7 +57,7 @@ int main(void)
 	box(accel_win, 0, 0);
 	
 	//wmove(values_win, 1, 1);
-	mvprintw(0, 0, "\tVAL\tMIN\tMAX\t\%");
+	mvprintw(0, 0, "\tVAL\tMIN\tMAX\tPERCENT");
 	
 	refresh();
 	//wrefresh(labels_win);
@@ -87,12 +65,14 @@ int main(void)
 	
 	while(1)
 	{
-		wiringPiI2CWrite(nunchukHandler, 0x00);
+	nunchukSetup(NUNCHUCK_I2C_ID);
+	
+		wiringPiI2CWrite(nunchukHandle, 0x00);
 		//delayMicroseconds(500);
 		delay(50);
 		for (i=0; i<=5; i++)
 		{
-			bytes[i] = wiringPiI2CRead(nunchukHandler);
+			bytes[i] = wiringPiI2CRead(nunchukHandle);
 		}
 	
 		int joyX = bytes[0];
@@ -156,12 +136,12 @@ int main(void)
 		
 		//write(dfd, (const void *)joyY_percent, 2);
 			sprintf(cText, "%d", joyY_percent);
-			write (LCDhandler, "\e[2JjoyY_percent: ", 17);
-			write (LCDhandler, cText, sizeof(joyY_percent)-2);
+			write (LCDhandle, "\e[2JjoyY_percent: ", 17);
+			write (LCDhandle, cText, sizeof(joyY_percent)-2);
 		//write (dfd, "\e[Ly1x3;X",9); 
 		
 		
-		write (LCDhandler, "\e[2JX:    Y:", 12);		// clear LCD;
+		write (LCDhandle, "\e[2JX:    Y:", 12);		// clear LCD;
 		
 		LCDprintIntXY(joyX_percent, 2, 0);
 		LCDprintIntXY(joyY_percent, 8, 0);
@@ -175,11 +155,11 @@ int main(void)
 		sprintf(cText, "%d", tempX);
 		strcpy(result, "\e[Ly2x0;");
 		strcat(result, cText);
-		write (LCDhandler, result, 10);
+		write (LCDhandle, result, 10);
 		strcpy(result, "\e[Ly1x");
 		strcat(result, cText);
 		strcat(result, ";X");
-			write (LCDhandler, result, 10);
+			write (LCDhandle, result, 10);
 		//mvprintw(2, 30 + ((50*joyY_percent)/100), "  x  ");
 		//write (dfd, "\n", 1);
 		//sprintf(cText, "%d", sizeof(joyY_percent));
@@ -193,49 +173,80 @@ int main(void)
 	
 	endwin();		// End curses mode
 	
-	close(LCDhandler);
+	close(LCDhandle);
+	close(nunchukHandle);
 	
 	return 0;
 }
 
 void LCDsetup(void)
 {
-    LCDhandler = open(LCD_DEVICE, O_WRONLY);
-    if (LCDhandler < 0)
-	printf("LCD not detected");
-    else
-    {
-	//k = write(dfd,"Hello\n", 6);
-    	//printf("write=%d\n", write(dfd,"LCD OK\n", 6));
-    	write(LCDhandler, "NUNCHUK TEST", 12);
-    }
+    if (DISPLAY_ON_LCD)
+	{
+		LCDhandle = open(LCD_DEVICE, O_WRONLY);
+		if (LCDhandle < 0)
+		{
+			printf("LCD not detected");
+			mvprintw(8, 0, "LCD NOT OK");
+		}
+		else
+		{
+		//k = write(dfd,"Hello\n", 6);
+			//printf("write=%d\n", write(dfd,"LCD OK\n", 6));
+			write(LCDhandle, "NUNCHUK TEST", 12);
+			mvprintw(8, 0, "LCD OK    ");
+		}
+	
+		mvprintw(8, 35, "LCDhandle=%d", LCDhandle);
+	}
 }
 
 void nunchukSetup(int deviceNo)
 {
-    nunchukHandler = wiringPiI2CSetup(deviceNo);
+    nunchukHandle = wiringPiI2CSetup(deviceNo);
+	
+	if (nunchukHandle < 0)
+	{
+		printf("Error setting up I2C: %d\n", errno);
+		mvprintw(8, 15, "I2C NOT OK");
+		// exit(errno);
+	}
+	else
+	{	// nunchuk device init
+		wiringPiI2CWriteReg8(nunchukHandle, 0xF0, 0x55);
+		delayMicroseconds(500);
+		wiringPiI2CWriteReg8(nunchukHandle, 0xFB, 0x00);
+		delayMicroseconds(500);
+		
+		mvprintw(8, 15, "I2C OK    ");
+	}
+	
+	mvprintw(8, 25, "nunchukHandle=%d", nunchukHandle);
 }
 
 void LCDprintIntXY(int value, char x, char y)
 {
-	char result[20];
-	char cValue[5];
-	char cX[2];
-	char cY[2];
-	
-	if (value < 10)
-	    sprintf(cValue, "0%d", value);
-	else
-	    sprintf(cValue, "%d", value);
-	    
-	sprintf(cX, "%d", x);
-	sprintf(cY, "%d", y);
-	strcpy(result, "\e[Ly");
-	strcat(result, cY);
-	strcat(result, "x");
-	strcat(result, cX);
-	strcat(result, ";");
-	strcat(result, cValue);
-	
-   	write (LCDhandler, result, strlen(result));
+    if (DISPLAY_ON_LCD)
+	{
+		char result[20];
+		char cValue[5];
+		char cX[2];
+		char cY[2];
+		
+		if (value < 10)
+			sprintf(cValue, "0%d", value);
+		else
+			sprintf(cValue, "%d", value);
+			
+		sprintf(cX, "%d", x);
+		sprintf(cY, "%d", y);
+		strcpy(result, "\e[Ly");
+		strcat(result, cY);
+		strcat(result, "x");
+		strcat(result, cX);
+		strcat(result, ";");
+		strcat(result, cValue);
+		
+		write (LCDhandle, result, strlen(result));
+	}
 }
