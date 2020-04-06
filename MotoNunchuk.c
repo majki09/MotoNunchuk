@@ -186,7 +186,6 @@ int main(void)
 	strcpy(result, "\e[Ly2x0;");
 	strcat(result, cText);
 	write (LCDhandler, result, 10);
-
 	strcpy(result, "\e[Ly1x");
 	strcat(result, cText);
 	strcat(result, ";X");

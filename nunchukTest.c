@@ -19,7 +19,7 @@ const int motorRangeLow = 980;
 const int motorRangeHigh = 820;
 const int NUNCHUCK_I2C_ID = 0x52;
 const char DISPLAY_ON_SCREEN = 1;
-const char DISPLAY_ON_LCD = 1;
+const char DISPLAY_ON_LCD = 0;
 int nunchukHandle;
 int LCDhandle;
 
@@ -31,6 +31,7 @@ int main(void)
 
 	printf("Testing the nunchuk through I2C\n");
 	wiringPiSetup();
+	nunchukSetup(NUNCHUCK_I2C_ID);
 	LCDsetup();
 		
 
@@ -65,23 +66,36 @@ int main(void)
 	
 	while(1)
 	{
-	nunchukSetup(NUNCHUCK_I2C_ID);
-	
-		wiringPiI2CWrite(nunchukHandle, 0x00);
-		//delayMicroseconds(500);
-		delay(50);
 		for (i=0; i<=5; i++)
 		{
 			bytes[i] = wiringPiI2CRead(nunchukHandle);
+			delay(10); //needed ?
 		}
+
+		//bytes[5]=0;
+		wiringPiI2CWrite(nunchukHandle, 0x00);
+		//delayMicroseconds(500);
+		//delay(50);
+
 	
 		int joyX = bytes[0];
 		int joyY = bytes[1];
-		int accelX = (bytes[2] << 2) | ((bytes[5] & 0xc0) >> 6);
+		int accelX = (bytes[2] << 2) | ((bytes[5] >> 2) & 0x03);
+		int accelY = (bytes[3] << 2) | ((bytes[5] >> 4) & 0x03);
+		int accelZ = (bytes[4] << 2) | ((bytes[5] >> 6) & 0x03);
+		int c = (bytes[5] & 0x02) >> 1;
+		int z = bytes[5] & 0x01;		
+	
+		/* OLD way
+		int joyX = bytes[0];
+		int joyY = bytes[1];
+		int accelZ = (bytes[2] << 2) | ((bytes[5] & 0xc0) >> 6);
 		int accelY = (bytes[3] << 2) | ((bytes[5] & 0x30) >> 4);
-		int accelZ = (bytes[4] << 2) | ((bytes[5] & 0x0c) >> 2);
+		int accelX = (bytes[4] << 2) | ((bytes[5] & 0x0c) >> 2);
 		int c = (bytes[5] & 0x02) >> 1;
 		int z = bytes[5] & 0x01;
+		//char z = bytes[5];
+		*/
 	
 	
 		//if(joyX > x_max) x_max = joyX;
@@ -134,6 +148,8 @@ int main(void)
 			// printf("data: joyX=%x joyY=%x accelX=%x accelY=%x accelZ=%x c=%x z=%x\n", joyX, joyY, accelX, accelY, accelZ, c, z);
 			
 		
+		if (DISPLAY_ON_LCD)
+		{
 		//write(dfd, (const void *)joyY_percent, 2);
 			sprintf(cText, "%d", joyY_percent);
 			write (LCDhandle, "\e[2JjoyY_percent: ", 17);
@@ -169,6 +185,7 @@ int main(void)
 		
 		
 		LCDprintIntXY(((20 * joyY_percent) / 100), 0, 3);
+		}
 	}
 	
 	endwin();		// End curses mode
@@ -217,7 +234,8 @@ void nunchukSetup(int deviceNo)
 		delayMicroseconds(500);
 		wiringPiI2CWriteReg8(nunchukHandle, 0xFB, 0x00);
 		delayMicroseconds(500);
-		
+
+		delay(500);
 		mvprintw(8, 15, "I2C OK    ");
 	}
 	
