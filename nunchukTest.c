@@ -32,17 +32,17 @@ int main(void)
 	printf("Testing the nunchuk through I2C\n");
 	wiringPiSetup();
 	nunchukSetup(NUNCHUCK_I2C_ID);
-	LCDsetup();
+//	LCDsetup();
 		
 
 	int bytes[6];
 	int i;
 	//int x_max=1, y_max=1;
-	int x_max=237, y_max=227;
+	int x_max=250, y_max=250;
 	//int accelX_max=0, accelY_max=0;
 	int accelX_max=750, accelY_max=750, accelZ_max=750;
 	//int x_min=255, y_min=255;
-	int x_min=32, y_min=32;
+	int x_min=15, y_min=9;
 	//int accelX_min=1024, accelY_min=1024;
 	int accelX_min=300, accelY_min=300, accelZ_min=300;
 	//int x_percent, y_percent;
